@@ -27,6 +27,7 @@ public:
 
 	int ServerSocket;
 
+	//To initiate and start socket
 	Server(string IPAddress, int portNumber, string protocol)
 	{
 		//Assigning IP address
@@ -57,6 +58,7 @@ public:
 		//Assigning family
 		serverAddress.sin_family = AF_INET;
 
+		//Creating socket
 		ServerSocket = socket(AF_INET, SOCK_STREAM, 0);
 
 		if (ServerSocket == 0) {
@@ -66,6 +68,7 @@ public:
 
 		cout << "Socket created" << endl;
 
+		//Binding the socket
 		if (bind(ServerSocket, (sockaddr *) &serverAddress, sizeof(serverAddress))
 				< 0) {
 			cerr << "Error in bind: " << strerror(errno) << endl;
@@ -74,6 +77,7 @@ public:
 
 		cout << "Bind successful" << endl;
 
+		//Listening for new connections
 		if (listen(ServerSocket, 5) < 0) {
 			cerr << "Error in listen: " << strerror(errno) << endl;
 			exit(0);
@@ -114,21 +118,29 @@ void* servingClientRequest(void * var)
 	Client c;
 	char threadName[1024];
 
+	//Synchronizing to perform task. Locking the mutex lock. 
 	pthread_mutex_lock(&lock);
 
+	//Performing the task. 
 	cout << "Request Number = " << numberOfRequests++ << endl;
 
+	//Task Completed. Unlocking the mutex. 
 	pthread_mutex_unlock(&lock);
 
+	//Fetching Thread Name
 	pthread_getname_np(pthread_self(), threadName, 1024);
 
+	//Printing thread name and thread ID
 	cout << "Inside Serving Client Request" << endl << "Thread = " << pthread_self() << endl
 			<< "Thread name = " << threadName << endl;
 
+	//Copying the client information
 	memcpy(&c, var, sizeof(Client));
 
+	//Deleting dynamic memory.
 	delete((Client *) var);
 
+	//Authenticating Client ID
 	if (read(c.clientSocket, buffer, 1024) < 0) {
 		cerr << "Error in read: " << strerror(errno) << endl;
 		exit(0);
@@ -136,10 +148,13 @@ void* servingClientRequest(void * var)
 
 	cout << "Received Message: " << buffer << endl;
 
+	//Executing unix command ls to fetch the files list.
 	fp = popen("ls","r");
 
+	//Reading from popen.
 	fread(buffer, 1024, 1, fp);
 
+	//Sending files list to client
 	if (write(c.clientSocket, buffer, 1024) < 0) {
 		cerr << "Error in write: " << strerror(errno) << endl;
 		exit(0);
@@ -147,21 +162,25 @@ void* servingClientRequest(void * var)
 
 	cout << "Message sent" << endl;
 
+	//Closing the popen 
 	pclose(fp); fp = NULL;
 
+	//Reading the file name send by the client
 	if (read(c.clientSocket, filename, 1024) < 0) {
 		cerr << "Error in read: " << strerror(errno) << endl;
 		exit(0);
 	}
 
+	//Openning the file requested by client. 
 	file.open(filename, ios::out | ios::in | ios::binary);
 
+	//Checking if the file is open or not. 
 	if(!file.is_open())
 	{
 		cerr << "Error in file opening" << endl;
 	}
 
-	//Send file size
+	//Finding file size
 	file.seekg(0, file.end);
 	fileSize = file.tellg();
 	file.seekg(0, file.beg);
@@ -170,6 +189,7 @@ void* servingClientRequest(void * var)
 
 	sprintf(buffer, "%d", fileSize);
 
+	//Sending file size
 	if (write(c.clientSocket, buffer, sizeof(buffer)) < 0) {
 		cerr << "Error in write: " << strerror(errno) << endl;
 		exit(0);
@@ -177,6 +197,7 @@ void* servingClientRequest(void * var)
 
 	cout << "File size sent" << endl;
 
+	//Sending file to client
 	while(fileSize > 0)
 	{
 		file.read(buffer, 1);
@@ -188,6 +209,7 @@ void* servingClientRequest(void * var)
 
 	cout << "File sent" << endl;
 
+	//Request handlled. Closing client socket. 
 	close(c.clientSocket);
 	file.close();
 
@@ -198,17 +220,22 @@ void* servingClientRequest(void * var)
 
 int main() {
 
+	//Starting a TCP server.
 	Server s("127.0.0.1", 8888, "TCP");
+	//Client class variable
 	Client c;
 	int threadValue = 0;
 	int i = 0;
 
 	unsigned int clientLength = sizeof(c.clientAddress);
 
+	//Buffer to received and send messages. 
 	char buffer[1024];
 
+	//Running server. 
 	while (1) {
 
+		//Once the client has connected.
 		c.clientSocket = accept(s.ServerSocket, (struct sockaddr *) &c.clientAddress,
 				&clientLength);
 
@@ -217,6 +244,7 @@ int main() {
 			exit(0);
 		} else {
 
+			//To know the client address
 			hostent * hostTemp;
 			char * hostAddressChar;
 
@@ -232,6 +260,7 @@ int main() {
 
 		cout << "Slave socket created" << endl;
 
+		//To send the client info to thread.
 		Client * toSend = new Client;
 		memcpy(toSend, &c, sizeof(Client));
 
@@ -239,6 +268,7 @@ int main() {
 		pthread_t t;
 		pthread_attr_t ta;
 
+		//Creating the thread to be detached so that the main thread don't have to wait. 
 		pthread_attr_init(&ta);
 		pthread_attr_setdetachstate(&ta, PTHREAD_CREATE_DETACHED);
 
@@ -248,6 +278,7 @@ int main() {
 
 		pthread_setname_np(t, threadName);
 
+		//Creating thread
 		threadValue = pthread_create(&t, &ta, servingClientRequest, (void *) toSend);
 
 		cout << "Thread created" << endl;
